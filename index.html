@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRAZUKA IPTV 5.0 - Premium Access</title>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #ffcc00;
+            --bg-dark: #121212;
+            --bg-sidebar: #1e1e1e;
+            --text-color: #ffffff;
+            --accent-color: #333;
+            --error-red: #ff4444;
+        }
+
+        body {
+            margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-dark); color: var(--text-color);
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+            -webkit-user-select: none; user-select: none;
+        }
+
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center;
+            z-index: 2000; backdrop-filter: blur(10px);
+        }
+        .login-card {
+            background: #1e1e1e; padding: 40px; border-radius: 15px;
+            border: 2px solid var(--primary-color); text-align: center;
+            width: 100%; max-width: 400px; box-shadow: 0 0 30px rgba(255, 204, 0, 0.2);
+        }
+        .login-card input { width: 100%; padding: 12px; background: #2a2a2a; border: 1px solid #444; border-radius: 5px; color: white; margin-bottom: 15px; box-sizing: border-box; font-size: 16px; text-align: center; }
+        .login-card button { width: 100%; padding: 12px; background: var(--primary-color); border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 16px; transition: transform 0.2s; }
+
+        .top-bar { height: 60px; min-height: 60px; background: #000; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 2px solid var(--primary-color); z-index: 100; }
+        .top-bar-left { display: flex; align-items: center; }
+        .app-title { font-size: 24px; font-weight: bold; letter-spacing: 1px; }
+        .app-title span { color: var(--primary-color); }
+
+        .logout-btn { background: none; border: 1px solid #444; color: #888; padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 5px; }
+
+        .container { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 60px); }
+        .sidebar { width: 300px; min-width: 300px; background: var(--bg-sidebar); display: flex; flex-direction: column; border-right: 1px solid #333; height: 100%; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #333; }
+        .search-box { position: relative; margin-top: 10px; }
+        .search-box i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #888; }
+        .search-box input { width: 100%; padding: 10px 10px 10px 35px; background: #2a2a2a; border: 1px solid #444; border-radius: 5px; color: white; box-sizing: border-box; }
+
+        .menu-categorias { flex: 1; overflow-y: auto; padding: 10px 0; }
+        .grupo-categoria { margin-bottom: 5px; }
+        .btn-categoria { width: 100%; padding: 12px 20px; background: none; border: none; color: #ccc; text-align: left; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+        .btn-categoria.active { background: #2a2a2a; color: white; }
+        .btn-categoria .chevron { transition: transform 0.3s; }
+        .btn-categoria.active .chevron { transform: rotate(180deg); }
+
+        .conteudo-canais { background: #151515; display: none; }
+        .btn-canal { width: 100%; padding: 10px 25px; background: none; border: none; color: #999; text-align: left; font-size: 13px; cursor: pointer; display: flex; align-items: center; transition: all 0.2s; }
+        .btn-canal:hover { background: #333; color: var(--primary-color); padding-left: 30px; }
+        .btn-canal.playing { background: rgba(255, 204, 0, 0.1); color: var(--primary-color); border-left: 3px solid var(--primary-color); }
+
+        .main-content { flex: 1; background: #000; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+        .video-container { width: 100%; height: 60%; position: relative; background: #000; overflow: hidden; }
+        .video-js { width: 100% !important; height: 100% !important; }
+
+        .custom-loader {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 50px; height: 50px; border: 5px solid rgba(255,255,255,0.1); border-top: 5px solid var(--primary-color);
+            border-radius: 50%; animation: spin 1s linear infinite; z-index: 100; display: none;
+        }
+        @keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+
+        .epg-container { height: 40%; background: #1a1a1a; border-top: 2px solid #333; padding: 15px; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+        .epg-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px; min-height: 40px; }
+        .epg-title { font-size: 18px; font-weight: bold; color: var(--primary-color); }
+        
+        #epgList { flex: 1; overflow-y: auto; }
+        .epg-item { background: #252525; padding: 12px; border-radius: 5px; margin-bottom: 10px; display: flex; align-items: center; border-left: 4px solid var(--primary-color); }
+        .epg-time { font-weight: bold; color: var(--primary-color); margin-right: 15px; min-width: 60px; }
+
+        .stop-btn { background: var(--error-red); color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 150; text-align: center; padding: 20px; }
+        .vjs-big-play-button { display: none !important; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
+
+        @media (max-width: 768px) {
+            .sidebar { position: absolute; z-index: 1000; height: 100%; transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="login-overlay">
+        <div class="login-card">
+            <div class="app-title" style="margin-bottom: 20px;">BRAZUKA<span>PLAYER</span></div>
+            <h2>Acesso Restrito</h2>
+            <p>Insira seu Usuário e Senha.</p>
+            <input type="text" id="user-name" placeholder="Nome de Usuário" style="margin-bottom: 10px;">
+            <input type="password" id="access-key" placeholder="Sua Senha">
+            <button id="login-btn" onclick="checkAccess()">ENTRAR</button>
+            <p id="login-error" style="color: var(--error-red); margin-top: 15px; display: none;">Dados incorretos.</p>
+        </div>
+    </div>
+
+    <div class="top-bar">
+        <div class="top-bar-left">
+            <button class="menu-toggle" onclick="toggleSidebar()" style="background:none; border:none; color:white; font-size:24px; margin-right:15px; cursor:pointer;"><i class="fas fa-bars"></i></button>
+            <div class="app-title">BRAZUKA<span>PLAYER</span></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <span id="user-display" style="color: #888; font-size: 12px;"></span>
+            <button class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> SAIR</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title" style="font-weight:bold; margin-bottom:10px;">Grade de Canais</div>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="channelSearch" placeholder="Buscar canal..." onkeyup="filterChannels()">
+                </div>
+            </div>
+            <div class="menu-categorias" id="categoryContainer"></div>
+        </div>
+
+        <div class="main-content">
+            <div class="video-container">
+                <div id="custom-loader" class="custom-loader"></div>
+                <div id="welcome-screen" class="overlay">
+                    <div class="overlay-content">
+                        <h1>BEM-VINDO AO BRAZUKA PLAYER</h1>
+                        <p>Escolha um canal na lista ao lado para começar.</p>
+                        <button onclick="hideWelcome()" style="padding: 12px 30px; background: var(--primary-color); border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 20px;">Começar a assistir</button>
+                    </div>
+                </div>
+                <div id="error-overlay" class="overlay" style="display:none; z-index: 200;">
+                    <div class="overlay-content">
+                        <i class="fas fa-exclamation-triangle" style="font-size:50px; color:var(--error-red); margin-bottom:20px;"></i>
+                        <p>CANAL FORA DO AR OU LINK INVÁLIDO.</p>
+                        <button onclick="hideError()" style="padding:12px 30px; background:var(--primary-color); border:none; border-radius:5px; font-weight:bold; cursor:pointer; margin-top:20px;">Tentar novamente</button>
+                    </div>
+                </div>
+                <video id="my-video" class="video-js vjs-default-skin" controls preload="auto"></video>
+            </div>
+
+            <div class="epg-container">
+                <div class="epg-header">
+                    <div class="epg-title" id="currentChannelName">Programação EPG</div>
+                    <button class="stop-btn" onclick="pararReproducao()"><i class="fas fa-stop"></i> STOP</button>
+                </div>
+                <div id="epgList">
+                    <p style="color: #888; text-align: center; margin-top: 20px;">Selecione um canal para ver a programação.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    
+    <script>
+        // ════════════════════════════════════════════════════════
+        //  LISTA DE CANAIS (EMBUTIDA)
+        // ════════════════════════════════════════════════════════
+        const channelData = [
+            {
+                "category": "NOTÍCIAS",
+                "icon": "fa-newspaper",
+                "channels": [
+                    { "name": "CNN Brasil", "url": "http://abso2.lat:80/700023437/396807076/91037.m3u8" },
+                    { "name": "RECORD NEWS", "url": "https://rnw-rn-samsungtvplus.otteravision.com/rnw/rn/rnw_rn_720p_high.m3u8" },
+                    { "name": "TV PUBLICA -AR", "url": "https://g4.proy-hor.transport.edge-access.net:443/b16/ngrp:c7_vivo01_dai_source-20001_all/c7_vivo01_dai_source-20001_480p.m3u8" },
+                    { "name": "TELESUR", "url": "https://mblesmain01.telesur.ultrabase.net/mbliveMain/hd/playlist.m3u8" },
+                    { "name": "DW ESPANOL", "url": "https://dwamdstream104.akamaized.net/hls/live/2015530/dwstream104/index.m3u8" },
+                    { "name": "CNN USA", "url": "https://jmp2.uk/plu-5421f71da6af422839419cb3.m3u8" },
+                    { "name": "A 24 -ARGENTINA", "url": "https://g4.vxral-hor.transport.edge-access.net/a15/ngrp:a24-100056_all/a24-100056_360p.m3u8" }
+                ]
+            },
+            {
+                "category": "ABERTOS",
+                "icon": "fa-satellite-dish",
+                "channels": [
+                    { "name": "GLOBO SP HD", "url": "http://abso2.lat:80/700023437/396807076/131789.m3u8" },
+                    { "name": "RECORD SP FHD", "url": "http://chefexpress.xyz:80/live/Marcelotkd/Ara20304050/2371.m3u8" },
+                    { "name": "SBT", "url": "https://stream.amsolution.net.br:8443/live/66db1cf131d45/index.m3u8" }
+                ]
+            },
+            {
+                "category": "CÂMERAS AO VIVO",
+                "icon": "fa-video",
+                "channels": [
+                    { "name": "VILLA GESSEL-ARGENTINA", "url": "http://camlapinocha.gesell.com.ar/playlist.m3u8" },
+                    { "name": "VILLA GESSEL CAM 2-ARGENTINA", "url": "http://cam104y3.gesell.com.ar/playlist.m3u8" },
+                    { "name": "PUNTA ARENAS-CHILE", "url": "https://ibanez.servercl.com/hls/live.m3u8?PlaylistM3UCL&direct=true" },
+                    { "name": "VALLE DE LAS LENAS-ARGENTINA", "url": "https://tv.streamcasthd.com:3895/live/laslenaslive.m3u8" },
+                    { "name": "SANTA MONICA CALIFORNIA-USA", "url": "https://outbound-production.explore.org/stream-production-65/.m3u8" },
+                    { "name": "RUA 9 GOIANIA-BRASIL", "url": "https://5a7d54e35f9d2.streamlock.net/r9oeste/r9oeste.stream/playlist.m3u8" },
+                    { "name": "RODA RICO .SAO PAULO -BR", "url": "https://5a8d73edc0407.streamlock.net/bnutv200/bnutv20001.stream/playlist.m3u8" },
+                    { "name": "BALNEARIO CAMBURIU- BR", "url": "https://5a8d73edc0407.streamlock.net/bnutv200/bnutv20003.stream/playlist.m3u8" },
+                    { "name": "COYHAIQUE /PATAGONIA-CHILE", "url": "https://v2.tustreaming.cl/fmarcoirirs/index.m3u8" },
+                    { "name": "PRACA DA BIBLIA-CASCAVEL BR", "url": "https://5b33b873179a2.streamlock.net:1443/cameraavbrasil2/cameraavbrasil2.stream/playlist.m3u8" },
+                    { "name": "PONTE DA AMIZADE FOZ-BRASIL", "url": "https://5b33b873179a2.streamlock.net:1443/camerapontefoz/camerapontefoz.stream/playlist.m3u8" },
+                    { "name": "RIO DE JANEIRO-BR", "url": "https://5ffab78b24f94.streamlock.net/ipcam5/ipcam5.stream/playlist.m3u8" },
+                    { "name": "CIUDAD DEL LEST-PARAGUAY", "url": "https://video02.logicahost.com.br/brimostech/camatg01.stream/playlist.m3u8" },
+                    { "name": "LA SERENA", "url": "https://v4.tustreaming.cl:443/elcqlaserena/index.m3u8?PlaylistM3UCL" }
+                ]
+            },
+            {
+                "category": "ESPORTES",
+                "icon": "fa-futbol",
+                "channels": [
+                    { "name": "UFC", "url": "https://dbrb49pjoymg4.cloudfront.net/manifest/3fec3e5cac39a52b2132f9c66c83dae043dc17d4/prod_default_xumo-ams-aws/194a140c-0cf5-443e-b747-08bf621d75a8/0.m3u8" },
+                    { "name": "FIFA+", "url": "https://d2w9q46ikgrcwx.cloudfront.net/v1/master/3722c60a815c199d9c0ef36c5b73da68a62b09d1/cc-of5cbk3sav3w5/v1/sysdata_s_p_a_fifa_7/samsungheadend_us/latest/main/hls/playlist.m3u8" },
+                    { "name": "CAZE TV HD", "url": "https://dfr80qz435crc.cloudfront.net/MNOP/Amagi/Caze/Caze_TV_BR/720p-vtt/index.m3u8" },
+                    { "name": "GE TV HD", "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/720p-vtt/index.m3u8" },
+                    { "name": "SPORTV HD", "url": "http://abso2.lat:80/700023437/396807076/124458.m3u8" },
+                    { "name": "PREMIERE 1 HD", "url": "http://abso2.lat:80/700023437/396807076/123065.m3u8" }
+                ]
+            },
+            {
+                "category": "CHILE",
+                "icon": "fa-flag",
+                "channels": [
+                    { "name": "13C CULTURA", "url": "https://redirector.dps.live/hls/13cultura/playlist.m3u8?PlaylistM3UCL" },
+                    { "name": "CANAL 13", "url": "https://redirector.dps.live/hls/13cl/playlist.m3u8?PlaylistM3UCL" },
+                    { "name": "MEGA", "url": "https://unlimited2-cl-isp.dps.live/mega/mega.smil/playlist.m3u8?PlaylistM3UCL" },
+                    { "name": "CHV ✪ | CL", "url": "https://redirector.rudo.video/hls-video/10b92cafdf3646cbc1e727f3dc76863621a327fd/chv/chv.smil/playlist.m3u8?PlaylistM3UCL" },
+                    { "name": "TVN 24 Horas ✪ | CL", "url": "https://mdstrm.com/live-stream-playlist/689ba606ecfe7915e1f8f741.m3u8?PlaylistM3UCL" },
+                    { "name": "Canal 9 Bío Bío TV", "url": "https://unlimited1-cl-isp.dps.live/c9/c9.smil/playlist.m3u8?PlaylistM3UCL" }
+                ]
+            }
+        ];
+
+        // ════════════════════════════════════════════════════════
+        //  CONFIGURAÇÕES
+        // ════════════════════════════════════════════════════════
+        const PROXY_BASE_URL = "https://brazuka-m3u8-proxy-production.up.railway.app";
+        const firebaseConfig = { databaseURL: "https://brazuka-monitor-default-rtdb.firebaseio.com" };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let player;
+        let hls;
+        let isStopping = false;
+        let userId = "";
+
+        // ════════════════════════════════════════════════════════
+        //  SISTEMA DE LOGIN (MÚLTIPLOS USUÁRIOS)
+        // ════════════════════════════════════════════════════════
+        window.onload = function() {
+            const savedUser = localStorage.getItem('brazuka_user');
+            const savedStatus = localStorage.getItem('brazuka_logged');
+            if (savedStatus === "true" && savedUser) {
+                userId = savedUser;
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('user-display').innerText = "Olá, " + userId;
+                renderCategories();
+                try { trackUserStatus("Online - Retornou"); } catch(e){}
+            }
+        };
+
+        async function checkAccess() {
+            const name = document.getElementById('user-name').value.trim().toLowerCase();
+            const key = document.getElementById('access-key').value.trim();
+            const btn = document.getElementById('login-btn');
+            const error = document.getElementById('login-error');
+
+            if (!name || !key) {
+                error.style.display = 'block';
+                error.innerText = "Preencha todos os campos.";
+                return;
+            }
+
+            btn.innerText = "VERIFICANDO...";
+            btn.disabled = true;
+
+            try {
+                // Consulta o Firebase na pasta 'usuarios/nome'
+                const snapshot = await db.ref('usuarios/' + name).once('value');
+                const userData = snapshot.val();
+
+                if (userData && userData.senha === key) {
+                    userId = name;
+                    localStorage.setItem('brazuka_user', name);
+                    localStorage.setItem('brazuka_logged', "true");
+                    
+                    document.getElementById('login-overlay').style.display = 'none';
+                    document.getElementById('user-display').innerText = "Olá, " + userId;
+                    
+                    renderCategories();
+                    try { trackUserStatus("Online - Login Realizado"); } catch(e){}
+                } else {
+                    error.style.display = 'block';
+                    error.innerText = "Usuário ou senha incorretos.";
+                    btn.innerText = "ENTRAR";
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                error.style.display = 'block';
+                error.innerText = "Erro ao conectar. Tente novamente.";
+                btn.innerText = "ENTRAR";
+                btn.disabled = false;
+            }
+        }
+
+        // ════════════════════════════════════════════════════════
+        //  RENDERIZAÇÃO E FILTRO
+        // ════════════════════════════════════════════════════════
+        function renderCategories() {
+            const container = document.getElementById('categoryContainer');
+            container.innerHTML = '';
+            channelData.forEach((cat) => {
+                const group = document.createElement('div');
+                group.className = 'grupo-categoria';
+                group.innerHTML = `
+                    <button class="btn-categoria" onclick="toggleCategoria(this)">
+                        <span><i class="fas ${cat.icon || 'fa-tv'} cat-icon"></i> ${cat.category}</span>
+                        <i class="fas fa-chevron-down chevron"></i>
+                    </button>
+                    <div class="conteudo-canais" style="display:none;">
+                        ${cat.channels.map(ch => `
+                            <button class="btn-canal" onclick="mudarCanal('${ch.url}', this, '${ch.name}')">
+                                <i class="fas fa-play-circle"></i> ${ch.name}
+                            </button>
+                        `).join('')}
+                    </div>
+                `;
+                container.appendChild(group);
+            });
+        }
+
+        function toggleCategoria(btn) {
+            const content = btn.nextElementSibling;
+            const isActive = btn.classList.contains('active');
+            document.querySelectorAll('.btn-categoria').forEach(b => {
+                if (b !== btn) { b.classList.remove('active'); b.nextElementSibling.style.display = 'none'; }
+            });
+            if (isActive) { btn.classList.remove('active'); content.style.display = 'none'; }
+            else { btn.classList.add('active'); content.style.display = 'block'; }
+        }
+
+        function filterChannels() {
+            const searchTerm = document.getElementById('channelSearch').value.toLowerCase();
+            document.querySelectorAll('.grupo-categoria').forEach(cat => {
+                const buttons = cat.querySelectorAll('.btn-canal');
+                const catButton = cat.querySelector('.btn-categoria');
+                const content = cat.querySelector('.conteudo-canais');
+                let hasMatch = false;
+
+                buttons.forEach(btn => {
+                    if (btn.textContent.toLowerCase().includes(searchTerm)) {
+                        btn.style.display = 'flex'; hasMatch = true;
+                    } else { btn.style.display = 'none'; }
+                });
+
+                if (searchTerm.length > 0) {
+                    cat.style.display = hasMatch ? 'block' : 'none';
+                    if (hasMatch) { catButton.classList.add('active'); content.style.display = 'block'; }
+                } else {
+                    cat.style.display = 'block'; catButton.classList.remove('active'); content.style.display = 'none';
+                }
+            });
+        }
+
+        // ════════════════════════════════════════════════════════
+        //  PLAYER E PROXY INTELIGENTE
+        // ════════════════════════════════════════════════════════
+        function buildProxyUrl(originalUrl) {
+            return `${PROXY_BASE_URL}/proxy/playlist?url=${encodeURIComponent(originalUrl)}`;
+        }
+
+        function mudarCanal(originalUrl, btn, channelName = "") {
+            isStopping = false; hideError();
+            document.getElementById('custom-loader').style.display = 'block';
+            document.querySelectorAll('.btn-canal').forEach(b => b.classList.remove('playing'));
+            btn.classList.add('playing');
+            document.getElementById('currentChannelName').innerText = channelName;
+
+            let finalUrl;
+            const bypassWords = ["google", "youtube", "camera", "direct", "rudo.video", "mdstrm.com", "otteravision.com", "cloudfront.net"];
+            const shouldBypass = bypassWords.some(word => originalUrl.toLowerCase().includes(word));
+
+            if (shouldBypass) {
+                finalUrl = originalUrl;
+            } else {
+                finalUrl = buildProxyUrl(originalUrl);
+            }
+
+            const videoElement = document.getElementById('my-video_html5_api');
+            if (hls) hls.destroy();
+
+            if (Hls.isSupported()) {
+                hls = new Hls({ maxBufferLength: 30, manifestLoadingTimeOut: 15000 });
+                hls.loadSource(finalUrl);
+                hls.attachMedia(videoElement);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => player.play());
+                hls.on(Hls.Events.ERROR, (e, d) => { if (d.fatal && !isStopping) showError(); });
+            } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+                videoElement.src = finalUrl; player.play();
+            }
+            hideWelcome();
+            try { trackUserStatus("Assistindo: " + channelName); } catch(e){}
+        }
+
+        function trackUserStatus(status) {
+            if (!userId || !db) return;
+            const userRef = db.ref('monitoramento/' + userId.replace(/[.#$[\]]/g, "_"));
+            userRef.set({
+                nome: userId, status: status,
+                ultima_atividade: new Date().toLocaleString(),
+                dispositivo: navigator.userAgent.substring(0, 50)
+            });
+            userRef.onDisconnect().update({ status: "Offline" });
+        }
+
+        function logout() { localStorage.clear(); location.reload(); }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            player = videojs('my-video', { bigPlayButton: false, loadingSpinner: false });
+            player.on('waiting', () => { document.getElementById('custom-loader').style.display = 'block'; });
+            player.on('playing', () => { document.getElementById('custom-loader').style.display = 'none'; });
+            player.on('error', () => { if (!isStopping) showError(); });
+        });
+
+        function pararReproducao() {
+            isStopping = true;
+            if (player) {
+                player.pause(); player.src(""); if (hls) hls.destroy();
+                document.getElementById('welcome-screen').style.display = 'flex';
+                document.querySelectorAll('.btn-canal').forEach(b => b.classList.remove('playing'));
+            }
+        }
+
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+        function hideWelcome() { document.getElementById('welcome-screen').style.display = 'none'; }
+        function showError() { if (!isStopping) { document.getElementById('error-overlay').style.display = 'flex'; document.getElementById('custom-loader').style.display = 'none'; } }
+        function hideError() { document.getElementById('error-overlay').style.display = 'none'; }
+    </script>
+</body>
+</html>
